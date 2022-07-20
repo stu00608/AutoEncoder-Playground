@@ -11,6 +11,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import Callback
 from tensorflow.keras.utils import plot_model
 from tensorflow.keras.metrics import RootMeanSquaredError
+from tensorflow.keras.losses import BinaryCrossentropy
 import tensorflow_probability as tfp
 import time
 
@@ -26,11 +27,12 @@ def sampling(args):
 def plot_latent_images(decoder, name, dim, n=10, digit_size=28, additional_msg=''):
     """Plots n x n digit images decoded from the latent space."""
     sample_z_list = np.array([np.random.normal(0, 1, dim) for _ in range(n**2)])
+    plt.clf()
     for index, z in enumerate(sample_z_list):
         decoded_digit = decoder(np.array([z]))
         plt.subplot(n, n, index+1)
         plt.axis("off")
-        plt.imshow(decoded_digit[0])
+        plt.imshow(decoded_digit[0], cmap="Greys_r")
 
     plt.savefig(name)
 
@@ -79,6 +81,8 @@ class VariationalAutoEncoder():
         self._build_decoder()
 
         self.model = Model(self.encoder_input, self.decoder(self.encoder_output[0]))
+
+        self.bc_loss = BinaryCrossentropy()
 
     def _build_encoder(self):
         self.encoder_input = Input(shape=self.input_shape, name="encoder_input")
@@ -164,6 +168,22 @@ class VariationalAutoEncoder():
         kl_l = self.kl_loss(y_true, y_pred)
         return r_l + kl_l
 
+    @tf.function
+    def train_step(self, x):
+        with tf.GradientTape() as tape:
+            z, mu, log_var = self.encoder(x, training=True)
+            reconstruct = self.decoder(z, training=True)
+
+            # r_loss = self.r_loss(x, reconstruct)
+            bc_loss = self.bc_loss(x, reconstruct)
+            kl_loss = self.kl_loss(mu, log_var)
+            loss = bc_loss + kl_loss
+
+        grads = tape.gradient(loss, self.model.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
+
+        return bc_loss, kl_loss, loss
+
     def train(self, train_dataset):
 
         # callbacks = []
@@ -184,7 +204,7 @@ class VariationalAutoEncoder():
             os.remove(encoder_model_name+'.png')
             os.remove(decoder_model_name+'.png')
 
-        optimizer = Adam(learning_rate=self.learning_rate)
+        self.optimizer = Adam(learning_rate=self.learning_rate)
         # train_acc_metric = RootMeanSquaredError()
 
         for epoch in range(self.epochs):
@@ -192,39 +212,18 @@ class VariationalAutoEncoder():
 
             start_time = time.time()
             for step, x_batch_data in enumerate(train_dataset):
-
-                with tf.GradientTape() as tape:
-                    z, mu, log_var = self.encoder(x_batch_data, training=True)
-                    reconstruct = self.decoder(z, training=True)
-
-                    r_loss = self.r_loss(x_batch_data, reconstruct)
-                    kl_loss = self.kl_loss(mu, log_var)
-                    # vae_loss = self.vae_loss(x_batch_data, reconstruct)
-
-                    # print(r_loss)
-                    # print(kl_loss)
-
-                    loss = r_loss + kl_loss
-
-                grads = tape.gradient(loss, self.model.trainable_weights)
-                optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
-
-                # train_acc_metric.update_state(x_batch_data, reconstruct)
+                bc_loss, kl_loss, loss = self.train_step(x_batch_data)
 
                 if step % 200 == 0:
-                    print(f"Step {step} | r_loss : {r_loss} | kl_loss : {kl_loss} | loss : {loss}")
-                
-                # train_acc = train_acc_metric.result()
-                # print(f"Training Acc : {train_acc}")
-                # train_acc_metric.reset_states()
+                    print(f"Step {step} | bc_loss : {bc_loss} | kl_loss : {kl_loss} | loss : {loss}")
             
             if self.use_wandb:  
                 wandb.log({
-                    "r_loss": r_loss,
+                    "bc_loss": bc_loss,
                     "kl_loss": kl_loss,
                     "loss": loss})
 
-                img_name = os.path.join(wandb.run.name, wandb.run.name+f"-distribution-{os.listdir(wandb.run.name)}.png")
+                img_name = os.path.join(wandb.run.name, wandb.run.name+f"-distribution-{len(os.listdir(wandb.run.name))}.png")
                 plot_latent_images(self.decoder, img_name, self.z_dim, n=8)
                 wandb.log({"model_architecture": wandb.Image(img_name)})
                 os.remove(img_name)
