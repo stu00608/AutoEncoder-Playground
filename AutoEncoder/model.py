@@ -3,9 +3,10 @@ import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, Conv2D, MaxPool2D, Conv2DTranspose, Reshape, Dense, LeakyReLU, BatchNormalization, Dropout, Flatten, Lambda, Activation
 from tensorflow.keras import backend as K
+from tensorflow.keras.optimizers import Adam
 
-class VariationalAutoEncoder():
-    # Variational Auto Encoder architecture in Keras.
+class AutoEncoder():
+    # Auto Encoder architecture in Keras.
 
     def __init__(self, input_shape: np.ndarray, params: dict, encoder_params: dict, decoder_params: dict) -> None:
         """Construct the parameters.
@@ -37,6 +38,13 @@ class VariationalAutoEncoder():
         self.z_dim = params["z_dim"]
 
         self._build()
+
+        optimizer = Adam(learning_rate=params["learning_rate"])
+
+        def reconstruction_loss(y_true, y_pred):
+            return K.sqrt(K.mean(K.square(y_true, y_pred)))
+        
+        self.model.compile(optimizer=optimizer, loss=reconstruction_loss)
     
     def _build(self):
 
