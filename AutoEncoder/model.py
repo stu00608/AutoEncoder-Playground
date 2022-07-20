@@ -5,8 +5,8 @@ from tensorflow.keras.layers import Input, Conv2D, MaxPool2D, Conv2DTranspose, R
 from tensorflow.keras import backend as K
 from tensorflow.keras.optimizers import Adam
 
-class AutoEncoder():
-    # Auto Encoder architecture in Keras.
+class VariationalAutoEncoder():
+    # Variational Auto Encoder architecture in Keras.
 
     def __init__(self, input_shape: np.ndarray, params: dict, encoder_params: dict, decoder_params: dict) -> None:
         """Construct the parameters.
@@ -22,7 +22,6 @@ class AutoEncoder():
         decoder_params : dict
             The layer parameters in config.
         """
-
         self.input_shape = input_shape
         self.encoder_conv_filters = encoder_params["conv_filters"]
         self.encoder_conv_kernels = encoder_params["conv_kernels"]
@@ -36,18 +35,16 @@ class AutoEncoder():
 
         self.n_layers = len(self.encoder_conv_filters)
         self.z_dim = params["z_dim"]
+        self.learning_rate = params["learning_rate"]
+        self.batch_size = params["batch_size"]
+        self.epochs = params["epochs"]
 
         self._build()
 
-        optimizer = Adam(learning_rate=params["learning_rate"])
+        self._compile()
 
-        def reconstruction_loss(y_true, y_pred):
-            return K.sqrt(K.mean(K.square(y_true, y_pred)))
-        
-        self.model.compile(optimizer=optimizer, loss=reconstruction_loss)
     
     def _build(self):
-
         self._build_encoder()
         self._build_decoder()
 
@@ -126,3 +123,30 @@ class AutoEncoder():
         decoder_output = x
 
         self.decoder = Model(decoder_input, decoder_output)
+    
+    def _compile(self):
+        def r_loss(y_true, y_pred):
+            """RMSE"""
+            return K.sqrt(K.square(K.mean(y_true, y_pred)))
+        
+        def kl_loss(y_true, y_pred):
+            return -0.5 * K.sum(1+self.log_var-K.square(self.mu)-K.exp(self.log_var), axis=1)
+        
+        def vae_loss(y_true, y_pred):
+            r_l = r_loss(y_true, y_pred)
+            kl_l = kl_loss(y_true, y_pred)
+            return r_l + kl_l
+        
+        optimizer = Adam(learning_rate=self.learning_rate)
+
+        self.model.compile(optimizer=optimizer, loss=vae_loss, metrics = [vae_loss, r_loss, kl_loss])
+    
+    def train(self, x_train, y_train):
+        history = self.model.fit(
+            x_train,
+            y_train,
+            batch_size=self.batch_size,
+            epochs=self.epochs,
+            shuffle=True)
+        
+        return history
