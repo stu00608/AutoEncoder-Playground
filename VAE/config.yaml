@@ -1,34 +1,28 @@
 params:
   epochs: 100
-  batch_size: 64
+  batch_size: 32
   use_dropout: 0 # 0 -> skip
   use_batch_norm: False
-  use_wandb: True
-  z_dim: 32
+  use_wandb: False
+  z_dim: 64
   learning_rate: 0.0005
 encoder:
   conv_filters:
     - 32
     - 64
-    - 64
   conv_kernels:
     - 3
     - 3
-    - 3
   conv_strides:
-    - 2
-    - 2
     - 1
+    - 2
 decoder:
   conv_t_filters:
-    - 64
     - 32
     - 1
   conv_t_kernels:
     - 3
     - 3
-    - 3
   conv_t_strides:
+    - 2
     - 1
-    - 2
-    - 2
