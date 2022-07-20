@@ -81,6 +81,8 @@ class VariationalAutoEncoder():
         self.mu = Dense(self.z_dim, name="mu")(x)
         self.log_var = Dense(self.z_dim, name="log_var")(x)
 
+        print(K.int_shape(self.mu))
+
         def sampling(args):
             mu, log_var = args
             # Make a normal distribution.
@@ -94,8 +96,10 @@ class VariationalAutoEncoder():
     
     def _build_decoder(self):
         decoder_input = Input(shape=(self.z_dim,), name='decoder_input')
+        print(np.prod(self.shape_before))
+        print(self.shape_before)
         
-        x = Dense(np.prod(self.shape_before))(decoder_input)
+        x = Dense(int(np.prod(self.shape_before)))(decoder_input)
         x = Reshape(self.shape_before)(x)
 
         for i in range(self.n_layers):
@@ -127,7 +131,7 @@ class VariationalAutoEncoder():
     def _compile(self):
         def r_loss(y_true, y_pred):
             """RMSE"""
-            return K.sqrt(K.square(K.mean(y_true, y_pred)))
+            return K.sqrt(K.mean(K.square(K.cast(y_true, "float32") - K.cast(y_pred, "float32"))))
         
         def kl_loss(y_true, y_pred):
             return -0.5 * K.sum(1+self.log_var-K.square(self.mu)-K.exp(self.log_var), axis=1)
@@ -147,6 +151,7 @@ class VariationalAutoEncoder():
             y_train,
             batch_size=self.batch_size,
             epochs=self.epochs,
-            shuffle=True)
+            shuffle=True,
+            verbose=1)
         
         return history

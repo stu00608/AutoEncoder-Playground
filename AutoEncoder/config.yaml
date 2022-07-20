@@ -1,6 +1,6 @@
 params:
   epochs: 200
-  batch_size: 32
+  batch_size: 16
   use_dropout: 0.25 # 0 -> skip
   use_batch_norm: True
   z_dim: 200
@@ -11,30 +11,24 @@ encoder:
     - 32
     - 64
     - 64
-    - 64
   conv_kernels:
-    - 3
     - 3
     - 3
     - 3
   conv_strides:
     - 2
     - 2
-    - 2
-    - 2
+    - 1
 decoder:
   conv_t_filters:
     - 64
-    - 64
     - 32
-    - 3
+    - 1
   conv_t_kernels:
     - 3
     - 3
     - 3
-    - 3
   conv_t_strides:
-    - 2
-    - 2
+    - 1
     - 2
     - 2
